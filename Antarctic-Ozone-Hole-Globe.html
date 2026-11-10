@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antarctic Ozone Hole Globe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* One visual world: deep space, instrument-panel HUD. Layout: full-bleed globe, right info rail, bottom control deck. */
+  --space:#04060c;
+  --panel:rgba(9,14,26,0.82);
+  --line:rgba(150,175,220,0.16);
+  --text:#e4e9f3;
+  --muted:#8f9bb2;
+  --clo:#ff8a3d;
+  --psc:#f0b8ff;
+  --hole:#8a7bff;
+  --air:#8fe3ff;
+  --wind:#cfe0ff;
+  --halley:#e8403a;
+  --font-ui:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-num:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--space);color:var(--text);font-family:var(--font-ui);overflow:hidden}
+#app{position:relative;height:100%;width:100%}
+#globe{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+.hud{position:absolute;z-index:3}
+header.hud{top:14px;left:16px;display:flex;flex-direction:column;gap:6px;pointer-events:none;max-width:calc(100% - 32px)}
+header h1{margin:0;font-size:13px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.date-row{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+#dateBig{font-family:var(--font-num);font-size:34px;font-weight:500;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+#seasonChip{font-size:14px;padding:3px 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel)}
+#seasonChip b{font-weight:600}
+
+aside#panel{position:absolute;z-index:3;top:14px;right:14px;bottom:150px;width:340px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:14px;backdrop-filter:blur(6px)}
+#panel h2{margin:0 0 4px;font-size:18px;font-weight:600;text-wrap:balance}
+#panel h3{margin:0 0 6px;font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#phaseText{margin:0;font-size:14.5px;line-height:1.45;color:#cbd3e2}
+#clNote{margin:6px 0 0;font-size:13px;line-height:1.4;color:var(--psc);display:none}
+dl.readouts{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13.5px}
+dl.readouts dt{color:var(--muted)}
+dl.readouts dd{margin:0;text-align:right;font-family:var(--font-num);font-size:12.5px;font-variant-numeric:tabular-nums}
+.pill{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11.5px;border:1px solid var(--line)}
+.pill.on{border-color:transparent;color:#0b0f18}
+.chart canvas{width:100%;height:150px;display:block}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:4px;flex-wrap:wrap}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.src{margin:4px 0 0;font-size:11.5px;color:var(--muted);line-height:1.35}
+.foot{margin:auto 0 0;font-size:11.5px;color:var(--muted);line-height:1.4;border-top:1px solid var(--line);padding-top:10px}
+
+footer.controls{position:absolute;z-index:3;left:14px;right:368px;bottom:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:9px;backdrop-filter:blur(6px)}
+.timeline{display:flex;align-items:center;gap:12px}
+#playBtn{flex:none;width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:#141c2e;color:var(--text);font-size:16px;cursor:pointer}
+#playBtn:hover{background:#1b2540}
+.slider-wrap{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+input[type=range]{width:100%;accent-color:var(--clo);margin:0}
+.months{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);font-family:var(--font-num);padding:0 2px}
+.chip-rows{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.group{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.group > span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+.chip{font:inherit;font-size:13px;color:var(--text);background:#121a2b;border:1px solid var(--line);border-radius:999px;padding:4px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.chip:hover{background:#1a2440}
+.chip[aria-pressed="true"]{background:#24304f;border-color:rgba(200,215,255,.45)}
+.chip[aria-pressed="false"] .sw{opacity:.3}
+.sw{width:10px;height:10px;border-radius:50%;flex:none}
+button:focus-visible,input:focus-visible{outline:2px solid var(--clo);outline-offset:2px}
+.note{font-size:11px;color:var(--muted)}
+
+#halleyLabel{position:absolute;z-index:2;pointer-events:none;font-size:12px;padding:3px 8px;border-radius:6px;background:rgba(9,14,26,.85);border:1px solid rgba(232,64,58,.6);white-space:nowrap;transform:translate(12px,-50%);display:none}
+#halleyLabel b{color:#ff7d76;font-weight:600}
+#halleyLabel span{font-family:var(--font-num);font-size:11px;color:var(--muted)}
+#detailsBtn{display:none}
+
+@media (max-width:820px){
+  aside#panel{top:auto;left:10px;right:10px;width:auto;bottom:182px;max-height:46%;display:none}
+  aside#panel.open{display:flex}
+  footer.controls{left:8px;right:8px;bottom:8px}
+  .chip-rows{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;gap:14px}
+  .group{flex-wrap:nowrap}
+  #dateBig{font-size:26px}
+  #detailsBtn{display:inline-flex;pointer-events:auto}
+  header.hud{left:12px;top:10px}
+}
+@media (prefers-reduced-motion:reduce){ #playBtn{transition:none} }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="globe" aria-label="Rotating Earth showing the Antarctic stratosphere through the year"></canvas>
+
+  <header class="hud">
+    <h1>Antarctic ozone hole · stratosphere over a year</h1>
+    <div class="date-row">
+      <span id="dateBig">12 Sep</span>
+      <span id="seasonChip"><b>Austral spring</b> · northern autumn</span>
+      <button class="chip" id="detailsBtn" aria-expanded="false" aria-controls="panel">Details</button>
+    </div>
+  </header>
+
+  <aside id="panel" aria-live="polite">
+    <section>
+      <h2 id="phaseTitle">Spring: chlorine switches on</h2>
+      <p id="phaseText"></p>
+      <p id="clNote">Natural chlorine only (about 0.6 ppb): the same cold, sealed vortex forms and the same clouds appear, but there is roughly a sixth of the chlorine to activate, so no deep hole forms, as in Halley's springs of 1956–1972.</p>
+    </section>
+    <section>
+      <h3>Right now</h3>
+      <dl class="readouts">
+        <dt>Sun at Halley, midday</dt><dd id="rSun">–</dd>
+        <dt>Daylight at Halley</dt><dd id="rDay">–</dd>
+        <dt>Polar vortex</dt><dd id="rVortex">–</dd>
+        <dt>Polar stratospheric clouds</dt><dd id="rPsc">–</dd>
+        <dt>Chlorine monoxide (ClO)</dt><dd id="rClo">–</dd>
+        <dt>Ozone hole</dt><dd id="rHole">–</dd>
+        <dt>Air inside the vortex</dt><dd id="rAir">–</dd>
+      </dl>
+    </section>
+    <section class="chart">
+      <h3>Ozone at Halley by month (DU)</h3>
+      <canvas id="ozChart" width="600" height="300"></canvas>
+      <div class="legend"><span><i style="background:#7f93b8"></i>1957–1972</span><span><i style="background:var(--clo)"></i>1990–2020</span></div>
+      <p class="src">Monthly averages of the Halley Dobson record (BAS, gap-filled). No sunlit readings May–July.</p>
+    </section>
+    <section class="chart">
+      <h3>Air sinking inside the vortex (km)</h3>
+      <canvas id="sinkChart" width="600" height="300"></canvas>
+      <p class="src">Air parcels starting at 18, 22, 26 and 30 km on 1 April. Scaled to the 5–6 km of sinking measured by aircraft over the 1987 winter.</p>
+    </section>
+    <p class="foot">Illustrative model, not a simulation. Seasonal timing follows observations; heights exaggerated ×12; Halley VI drawn far larger than scale. Drag to turn the view, pinch or scroll to zoom.</p>
+  </aside>
+
+  <footer class="controls">
+    <div class="timeline">
+      <button id="playBtn" aria-label="Pause">❚❚</button>
+      <div class="slider-wrap">
+        <label for="daySlider" class="note" style="position:absolute;left:-9999px">Day of year</label>
+        <input id="daySlider" type="range" min="0" max="364" step="1" value="254">
+        <div class="months"><span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span></div>
+      </div>
+    </div>
+    <div class="chip-rows">
+      <div class="group" role="group" aria-label="Calendar speed"><span>Speed</span>
+        <button class="chip" data-speed="2" aria-pressed="false">2 d/s</button>
+        <button class="chip" data-speed="6" aria-pressed="true">6 d/s</button>
+        <button class="chip" data-speed="15" aria-pressed="false">15 d/s</button>
+      </div>
+      <div class="group" role="group" aria-label="Earth spin"><span>Spin</span>
+        <button class="chip" data-spin="0.6" aria-pressed="false">Slow</button>
+        <button class="chip" data-spin="2.5" aria-pressed="true">Normal</button>
+        <button class="chip" data-spin="7" aria-pressed="false">Fast</button>
+      </div>
+      <div class="group" role="group" aria-label="Chlorine level"><span>Chlorine</span>
+        <button class="chip" data-cl="peak" aria-pressed="true">Late-1990s peak · 3.5 ppb</button>
+        <button class="chip" data-cl="natural" aria-pressed="false">Natural only · 0.6 ppb</button>
+      </div>
+      <div class="group" role="group" aria-label="Layers"><span>Layers</span>
+        <button class="chip" data-layer="clo" aria-pressed="true"><i class="sw" style="background:var(--clo)"></i>ClO</button>
+        <button class="chip" data-layer="psc" aria-pressed="true"><i class="sw" style="background:var(--psc)"></i>Polar clouds</button>
+        <button class="chip" data-layer="hole" aria-pressed="true"><i class="sw" style="background:var(--hole)"></i>Ozone hole</button>
+        <button class="chip" data-layer="wind" aria-pressed="true"><i class="sw" style="background:var(--wind)"></i>Vortex winds</button>
+        <button class="chip" data-layer="air" aria-pressed="true"><i class="sw" style="background:var(--air)"></i>Sinking air</button>
+        <button class="chip" data-layer="halley" aria-pressed="true"><i class="sw" style="background:var(--halley)"></i>Halley VI</button>
+      </div>
+      <div class="group" role="group" aria-label="Camera"><span>View</span>
+        <button class="chip" data-view="side">Side</button>
+        <button class="chip" data-view="pole">Under the pole</button>
+        <button class="chip" data-view="halley">Over Halley</button>
+      </div>
+    </div>
+  </footer>
+
+  <div id="halleyLabel"><b>Halley VI</b> <span>75.6°S 26.6°W</span></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+"use strict";
+const DEG=Math.PI/180, EPS=23.44*DEG;
+const HALLEY={lat:-75.6, lon:-26.6};
+const HEIGHT_EXAG=12;          // vertical exaggeration of the stratosphere
+const SINK_EXAG=8;             // sinking motion shown faster than real
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MDAYS=[31,28,31,30,31,30,31,31,30,31,30,31];
+const OZ={pre:[318,299,294,279,null,null,null,299,280,300,353,350], modern:[282,269,261,252,null,null,null,212,167,154,222,280]};
+
+const reduceMotion=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const state={day:254, playing:!reduceMotion, speed:6, spin:reduceMotion?0.6:2.5, hours:13, vrot:0,
+  cl:"peak", layers:{clo:true,psc:true,hole:true,wind:true,air:true,halley:true}};
+
+/* ---------- seasonal model (day of year, 0 = 1 Jan) ---------- */
+const sm=(a,b,x)=>{const t=Math.min(Math.max((x-a)/(b-a),0),1);return t*t*(3-2*t);};
+const model={
+  vortex:d=>sm(79,152,d)*(1-sm(305,349,d)),
+  psc:d=>sm(140,175,d)*(1-sm(255,290,d)),
+  act:d=>sm(150,215,d)*(1-sm(270,320,d)),
+  hole:d=>sm(225,270,d)*(1-sm(300,345,d)),
+  sinkW:d=>sm(75,100,d)*(1-sm(290,322,d))*(1.3-0.6*sm(100,300,d))
+};
+let SINK_K=1;
+function integrateSink(h0,d0,d1,K){let h=h0;for(let d=d0;d<d1;d+=0.5){h-=K*model.sinkW(d)*(h/20)*0.5;}return h;}
+(function calibrate(){ // 20-km parcel sinks 5.5 km from 1 Apr to 31 Oct
+  let K=0.03; for(let i=0;i<30;i++){const drop=20-integrateSink(20,91,304,K);K*=5.5/drop;} SINK_K=K; })();
+function sinkRate(d,h){return SINK_K*model.sinkW(d)*(h/20);} // km per day
+
+/* ---------- renderer & scene ---------- */
+const canvas=document.getElementById("globe");
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.setClearColor(0x04060c,1);
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(38,1,0.01,200);
+camera.position.set(1.3,-1.55,2.55);
+const controls=new THREE.OrbitControls(camera,canvas);
+controls.enableDamping=true; controls.dampingFactor=0.08; controls.enablePan=false;
+controls.minDistance=1.35; controls.maxDistance=7; controls.rotateSpeed=0.6;
+
+scene.add(new THREE.AmbientLight(0x2a3558,0.16));
+const sun=new THREE.DirectionalLight(0xfff4e6,1.45); sun.position.set(20,0,0); scene.add(sun);
+
+// stars
+(function(){const n=2600,p=new Float32Array(n*3);for(let i=0;i<n;i++){const u=Math.random()*2-1,t=Math.random()*Math.PI*2,r=80;const s=Math.sqrt(1-u*u);p[i*3]=r*s*Math.cos(t);p[i*3+1]=r*u;p[i*3+2]=r*s*Math.sin(t);}
+ const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.BufferAttribute(p,3));
+ scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0xb9c6e6,size:0.14,sizeAttenuation:true,transparent:true,opacity:0.75,depthWrite:false})));})();
+
+// hierarchy: orbit (season) -> tilt (23.44°) -> spin (day)
+const orbit=new THREE.Group(), tilt=new THREE.Group(), spin=new THREE.Group();
+tilt.rotation.z=-EPS; scene.add(orbit); orbit.add(tilt); tilt.add(spin);
+
+/* ---------- Earth texture (drawn, no external images) ---------- */
+const LAND={
+ namerica:[[-168,66],[-162,70],[-150,71],[-140,70],[-128,70],[-115,68],[-95,72],[-85,70],[-80,63],[-90,60],[-94,58],[-85,55],[-79,52],[-77,60],[-70,62],[-64,60],[-60,55],[-56,52],[-60,47],[-66,45],[-70,42],[-74,40],[-76,35],[-81,31],[-80,26],[-82,28],[-84,30],[-90,30],[-97,27],[-97,21],[-92,18],[-87,21],[-88,16],[-83,10],[-79,9],[-81,8],[-86,12],[-92,14],[-96,16],[-105,20],[-110,24],[-112,30],[-115,31],[-117,33],[-121,35],[-124,40],[-124,46],[-123,49],[-130,54],[-135,58],[-142,60],[-150,60],[-155,58],[-160,59],[-165,62],[-165,65]],
+ samerica:[[-80,9],[-77,8],[-72,12],[-62,11],[-55,6],[-50,2],[-48,-1],[-40,-3],[-35,-6],[-35,-10],[-39,-15],[-40,-22],[-45,-24],[-48,-26],[-53,-34],[-58,-38],[-62,-40],[-65,-45],[-68,-50],[-69,-55],[-72,-53],[-75,-48],[-73,-40],[-71,-30],[-70,-18],[-76,-14],[-81,-6],[-80,-2],[-78,2]],
+ eurasia:[[-10,36],[-9,43],[-2,44],[-5,48],[2,51],[8,54],[10,57],[5,58],[5,62],[12,66],[20,70],[30,71],[40,68],[45,68],[55,70],[65,70],[70,73],[80,73],[90,76],[105,78],[115,74],[130,72],[140,72],[160,70],[175,69],[180,66],[178,63],[170,60],[163,58],[160,55],[156,51],[155,57],[150,59],[142,59],[138,55],[140,50],[135,44],[130,42],[128,38],[126,35],[122,31],[121,28],[118,24],[111,21],[108,17],[109,12],[105,9],[103,10],[100,13],[98,9],[100,4],[104,1],[101,3],[98,8],[98,15],[94,17],[92,22],[88,22],[85,19],[80,15],[80,10],[77,8],[73,16],[72,21],[67,24],[62,25],[57,26],[52,28],[48,30],[50,26],[52,24],[56,24],[59,22],[56,18],[52,16],[45,13],[43,15],[39,21],[35,28],[33,31],[35,35],[30,37],[27,40],[24,38],[22,40],[19,42],[15,45],[13,42],[16,39],[12,38],[10,44],[5,43],[3,42],[0,39],[-5,36]],
+ africa:[[-17,21],[-13,27],[-9,32],[-6,35],[0,36],[10,37],[11,33],[20,31],[25,32],[32,31],[34,28],[38,22],[43,12],[51,12],[48,5],[42,-2],[40,-10],[40,-16],[35,-24],[33,-28],[28,-33],[20,-35],[17,-30],[14,-23],[12,-15],[13,-6],[9,-1],[9,4],[4,6],[-4,5],[-8,4],[-13,8],[-17,13]],
+ madagascar:[[44,-13],[50,-15],[50,-23],[45,-25],[43,-20]],
+ australia:[[114,-22],[122,-18],[130,-12],[137,-12],[137,-16],[141,-11],[146,-18],[153,-25],[153,-30],[150,-37],[146,-39],[141,-38],[135,-35],[130,-32],[124,-34],[115,-34],[113,-26]],
+ nz:[[172,-34],[178,-38],[176,-41],[171,-46],[167,-46],[172,-41]],
+ uk:[[-5,50],[1,51],[1,53],[-2,56],[-3,59],[-6,58],[-5,55],[-3,54],[-5,52]],
+ japan:[[130,31],[135,34],[140,35],[142,40],[141,45],[140,42],[136,37],[131,34]],
+ sumatra:[[95,5],[106,-6],[103,-5],[96,2]],
+ borneo:[[109,1],[117,7],[119,1],[116,-4],[110,-3]],
+ guinea:[[131,-1],[141,-3],[150,-10],[141,-9],[135,-4]]
+};
+const ICE={
+ greenland:[[-73,78],[-60,82],[-35,83],[-20,80],[-20,72],[-30,68],[-40,65],[-44,60],[-50,62],[-54,67],[-58,73],[-70,76]],
+ antarctica:[[-180,-78],[-160,-78],[-150,-77],[-140,-75],[-130,-74],[-120,-73.5],[-110,-74],[-100,-73],[-90,-72.5],[-80,-73],[-75,-71],[-68,-68],[-64,-65],[-58,-63.2],[-57,-64],[-60,-66],[-62,-69],[-61,-73],[-60,-75],[-55,-77],[-45,-78],[-36,-78],[-32,-77],[-28,-75.8],[-25,-74.5],[-18,-72.5],[-10,-71],[0,-70],[10,-70],[20,-70],[30,-69.5],[40,-68.5],[50,-67],[60,-67],[70,-68],[75,-69.5],[80,-67],[90,-66.5],[100,-66],[110,-66],[120,-66.5],[130,-66],[140,-66.5],[150,-68],[160,-70],[165,-71],[170,-72],[168,-76],[170,-77.5],[180,-78],[180,-90],[-180,-90]]
+};
+function makeNoiseCanvas(w,h,seed){const c=document.createElement("canvas");c.width=w;c.height=h;const x=c.getContext("2d");const im=x.createImageData(w,h);let s=seed;for(let i=0;i<w*h;i++){s=(s*16807)%2147483647;const v=(s/2147483647)*255;im.data[i*4]=im.data[i*4+1]=im.data[i*4+2]=v;im.data[i*4+3]=255;}x.putImageData(im,0,0);return c;}
+function earthTexture(){
+  const W=2048,H=1024,c=document.createElement("canvas");c.width=W;c.height=H;const g=c.getContext("2d");
+  const P=(lon,lat)=>[(lon+180)/360*W,(90-lat)/180*H];
+  const path=(ctx,poly)=>{ctx.beginPath();poly.forEach((p,i)=>{const q=P(p[0],p[1]);i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]);});ctx.closePath();};
+  const oc=g.createLinearGradient(0,0,0,H);
+  oc.addColorStop(0,"#0b2a3f");oc.addColorStop(0.25,"#0d3557");oc.addColorStop(0.5,"#0b3a66");oc.addColorStop(0.75,"#0d3557");oc.addColorStop(1,"#0a2638");
+  g.fillStyle=oc;g.fillRect(0,0,W,H);
+  const n1=makeNoiseCanvas(256,128,7),n2=makeNoiseCanvas(64,32,13);
+  g.globalAlpha=0.06;g.imageSmoothingEnabled=true;g.drawImage(n1,0,0,W,H);g.globalAlpha=1;
+  // land on its own layer
+  const L=document.createElement("canvas");L.width=W;L.height=H;const l=L.getContext("2d");
+  l.fillStyle="#fff";Object.values(LAND).forEach(p=>{path(l,p);l.fill();});
+  l.globalCompositeOperation="source-in";
+  const lg=l.createLinearGradient(0,0,0,H);
+  [[0,"#8d9a8a"],[0.11,"#4f6b45"],[0.2,"#2f5a34"],[0.3,"#5d7a3c"],[0.36,"#b39a62"],[0.42,"#c2a46a"],[0.47,"#3f7a35"],[0.53,"#2f6e2f"],[0.6,"#7e8a4a"],[0.66,"#a88f5c"],[0.72,"#5d7a3c"],[1,"#5d7a3c"]].forEach(s=>lg.addColorStop(s[0],s[1]));
+  l.fillStyle=lg;l.fillRect(0,0,W,H);
+  l.globalCompositeOperation="source-atop";l.globalAlpha=0.28;l.drawImage(n2,0,0,W,H);l.globalAlpha=0.18;l.drawImage(n1,0,0,W,H);
+  l.globalAlpha=1;
+  g.drawImage(L,0,0);
+  // ice sheets
+  Object.values(ICE).forEach(p=>{path(g,p);g.fillStyle="#e9f1f8";g.fill();});
+  g.save();Object.values(ICE).forEach(p=>{path(g,p);});g.clip();g.globalAlpha=0.12;g.globalCompositeOperation="multiply";g.drawImage(n1,0,0,W,H);g.restore();
+  g.globalAlpha=1;g.globalCompositeOperation="source-over";
+  g.strokeStyle="rgba(210,230,255,0.25)";g.lineWidth=1.2;
+  Object.values(LAND).forEach(p=>{path(g,p);g.stroke();});
+  const t=new THREE.CanvasTexture(c);t.anisotropy=renderer.capabilities.getMaxAnisotropy();
+  return t;
+}
+const earth=new THREE.Mesh(new THREE.SphereGeometry(1,128,96),new THREE.MeshPhongMaterial({map:earthTexture(),specular:0x1d2a3a,shininess:14}));
+spin.add(earth);
+
+/* ---------- shared shader code ---------- */
+const U={uSun:{value:new THREE.Vector3(1,0,0)},uTime:{value:0},uVortex:{value:0},uPsc:{value:0},uAct:{value:0},uHole:{value:0},
+  uCl:{value:1},uVRot:{value:0},uExtS:{value:-60},uExtN:{value:70},uAlpha:{value:1}};
+const VERT=`varying vec3 vPos;varying vec3 vN;varying vec3 vV;
+void main(){vPos=normalize(position);vec4 wp=modelMatrix*vec4(position,1.0);vN=normalize(mat3(modelMatrix)*normal);vV=normalize(cameraPosition-wp.xyz);gl_Position=projectionMatrix*viewMatrix*wp;}`;
+const COMMON=`uniform vec3 uSun;uniform float uTime,uVortex,uPsc,uAct,uHole,uCl,uVRot,uExtS,uExtN,uAlpha;
+varying vec3 vPos;varying vec3 vN;varying vec3 vV;
+float hash(vec3 p){p=fract(p*0.3183099+0.1);p*=17.0;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
+float noise(vec3 x){vec3 i=floor(x);vec3 f=fract(x);f=f*f*(3.0-2.0*f);
+return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
+float fbm(vec3 p){float a=0.5,s=0.0;for(int i=0;i<5;i++){s+=a*noise(p);p=p*2.03+vec3(1.7,9.2,3.1);a*=0.5;}return s;}
+const float DEG=0.0174533;
+void geo(out float lat,out float lon){lat=asin(clamp(vPos.y,-1.0,1.0));lon=atan(-vPos.z,vPos.x);}
+void vortexGeom(float lat,float lon,out float d,out float R,out float lonP){
+ lonP=lon-uVRot;vec3 q=vec3(cos(lat)*cos(lonP),sin(lat),-cos(lat)*sin(lonP));
+ vec3 c=vec3(cos(-84.0*DEG),sin(-84.0*DEG),0.0);
+ d=acos(clamp(dot(q,c),-1.0,1.0))/DEG; R=27.0*(1.0+0.10*cos(2.0*lonP+0.5));}
+float sunlit(){return smoothstep(-0.11,0.04,dot(vPos,uSun));}
+float rim(){return pow(1.0-abs(dot(vN,vV)),2.0);}`;
+function shell(radius,frag,order,blend){
+  const m=new THREE.ShaderMaterial({uniforms:U,vertexShader:VERT,fragmentShader:COMMON+frag,transparent:true,depthWrite:false,blending:blend||THREE.NormalBlending});
+  const mesh=new THREE.Mesh(new THREE.SphereGeometry(radius,128,96),m);mesh.renderOrder=order;spin.add(mesh);return mesh;}
+const R_KM=r=>1+r/6371*HEIGHT_EXAG;
+
+// seasonal sea ice
+shell(1.0025,`void main(){float lat,lon;geo(lat,lon);float L=lat/DEG;
+ float n=fbm(vPos*7.0);float s=1.0-smoothstep(uExtS-2.5,uExtS+2.5,L+ (n-0.5)*6.0);
+ float nn=smoothstep(uExtN-2.5,uExtN+2.5,L+(n-0.5)*6.0);float a=max(s,nn)*0.82;
+ float light=0.12+0.88*max(dot(vPos,uSun),0.0);
+ gl_FragColor=vec4(vec3(0.86,0.92,0.98)*light,a);}`,1);
+
+// ozone hole (depleted column), with 220 DU contour
+const holeMesh=shell(R_KM(14),`void main(){float lat,lon,d,R,lp;geo(lat,lon);vortexGeom(lat,lon,d,R,lp);
+ float inside=1.0-smoothstep(R-5.0,R+1.0,d);float core=1.0-smoothstep(R*0.35,R,d);
+ float n=fbm(vec3(cos(lp)*2.5,lat*3.0,sin(lp)*2.5)+uTime*0.01);
+ float dep=uHole*inside*(0.35+0.65*core)*pow(uCl,1.25)*(0.85+0.3*n);
+ float line=(1.0-smoothstep(0.0,0.035,abs(dep-0.33)))*step(0.05,uHole*pow(uCl,1.25));
+ vec3 col=mix(vec3(0.33,0.24,0.85),vec3(0.62,0.55,1.0),line);
+ gl_FragColor=vec4(col,(dep*0.62+line*0.55)*uAlpha);}`,2);
+
+// polar stratospheric clouds (nacreous, iridescent when sunlit)
+const pscMesh=shell(R_KM(21),`void main(){float lat,lon,d,R,lp;geo(lat,lon);vortexGeom(lat,lon,d,R,lp);
+ float core=1.0-smoothstep(R*0.62,R*0.92,d);
+ vec3 p=vec3(cos(lp*1.0)*4.0,lat*9.0,sin(lp)*4.0)+vec3(uTime*0.03,0.0,0.0);
+ float n=fbm(p);float cloud=smoothstep(0.46,0.72,n);
+ float sl=sunlit();float vd=dot(vN,vV);
+ vec3 iri=0.5+0.5*cos(6.2831*(vec3(0.0,0.33,0.67)+vd*1.6+n*1.2));
+ vec3 col=mix(vec3(0.93,0.78,1.0),iri,0.45*sl);
+ float bright=0.35+0.65*sl;
+ gl_FragColor=vec4(col*bright,uPsc*uVortex*core*cloud*0.78*uAlpha);}`,3);
+
+// chlorine monoxide: activated chlorine that only shows where sunlight reaches the vortex
+const cloMesh=shell(R_KM(25),`void main(){float lat,lon,d,R,lp;geo(lat,lon);vortexGeom(lat,lon,d,R,lp);
+ float inside=1.0-smoothstep(R-4.0,R+1.5,d);
+ float n=fbm(vec3(cos(lp*1.3)*3.0,lat*4.0,sin(lp*1.3)*3.0)+uTime*0.02);
+ float edge=0.65+0.35*smoothstep(R*0.3,R*0.9,d);
+ float a=uAct*uVortex*inside*sunlit()*uCl*(0.5+0.7*n)*edge;
+ vec3 col=mix(vec3(1.0,0.42,0.1),vec3(1.0,0.86,0.38),n);
+ gl_FragColor=vec4(col,clamp(a*0.9+rim()*a*0.5,0.0,0.92)*uAlpha);}`,4);
+
+// vortex winds: eastward streaks along the vortex edge (polar night jet)
+const windMesh=shell(R_KM(34),`void main(){float lat,lon,d,R,lp;geo(lat,lon);vortexGeom(lat,lon,d,R,lp);
+ float band=1.0-smoothstep(0.0,3.2,abs(d-R));
+ float s=fract(lp*3.0/3.14159-uTime*0.25+fbm(vPos*4.0)*0.3);
+ float streak=smoothstep(0.0,0.08,s)*(1.0-smoothstep(0.18,0.55,s));
+ float light=0.35+0.65*sunlit();
+ gl_FragColor=vec4(vec3(0.82,0.88,1.0)*light,band*streak*uVortex*0.6*uAlpha);}`,6,THREE.AdditiveBlending);
+
+// atmosphere rim glow
+(function(){const m=new THREE.ShaderMaterial({uniforms:{uSunW:{value:new THREE.Vector3(1,0,0)}},side:THREE.BackSide,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+ vertexShader:`varying vec3 vN;varying vec3 vW;void main(){vN=normalize(mat3(modelMatrix)*normal);vec4 w=modelMatrix*vec4(position,1.0);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`,
+ fragmentShader:`uniform vec3 uSunW;varying vec3 vN;varying vec3 vW;void main(){vec3 v=normalize(cameraPosition-vW);float f=pow(clamp(0.72+dot(vN,v),0.0,1.0),3.0);
+ float l=0.25+0.75*smoothstep(-0.3,0.6,dot(normalize(vW),uSunW));gl_FragColor=vec4(vec3(0.35,0.6,1.0)*f*l,f*l);}`});
+ const a=new THREE.Mesh(new THREE.SphereGeometry(1.085,96,64),m);a.renderOrder=7;scene.add(a);})();
+
+/* ---------- sinking air parcels ---------- */
+const NP=800;
+const pLat=new Float32Array(NP),pLon=new Float32Array(NP),pH=new Float32Array(NP),pPos=new Float32Array(NP*3);
+function vortexDist(latD,lonP){const la=latD*DEG;const q=[Math.cos(la)*Math.cos(lonP),Math.sin(la),-Math.cos(la)*Math.sin(lonP)];
+ const c=[Math.cos(-84*DEG),Math.sin(-84*DEG),0];const d=Math.acos(Math.max(-1,Math.min(1,q[0]*c[0]+q[1]*c[1]+q[2]*c[2])))/DEG;
+ return {d,R:27*(1+0.10*Math.cos(2*lonP+0.5))};}
+function spawn(i,anyHeight){for(let k=0;k<40;k++){const lat=-90+Math.random()*30,lon=(Math.random()*2-1)*Math.PI;const g=vortexDist(lat,lon);
+ if(g.d<g.R*0.85){pLat[i]=lat;pLon[i]=lon;break;}} pH[i]=anyHeight?13+Math.random()*30:38+Math.random()*5;}
+for(let i=0;i<NP;i++)spawn(i,true);
+const pGeo=new THREE.BufferGeometry();pGeo.setAttribute("position",new THREE.BufferAttribute(pPos,3));
+const pMat=new THREE.PointsMaterial({color:0x8fe3ff,size:0.011,sizeAttenuation:true,transparent:true,opacity:0.8,depthWrite:false});
+const parcels=new THREE.Points(pGeo,pMat);parcels.renderOrder=5;spin.add(parcels);
+function updateParcels(dtDays){
+  for(let i=0;i<NP;i++){
+    if(dtDays>0){pH[i]-=sinkRate(state.day,pH[i])*SINK_EXAG*dtDays; if(pH[i]<12.5)spawn(i,false);}
+    const la=pLat[i]*DEG,lo=pLon[i]+state.vrot,r=R_KM(pH[i]);
+    pPos[i*3]=Math.cos(la)*Math.cos(lo)*r;pPos[i*3+1]=Math.sin(la)*r;pPos[i*3+2]=-Math.cos(la)*Math.sin(lo)*r;}
+  pGeo.attributes.position.needsUpdate=true;}
+
+/* ---------- Halley VI (not to scale) ---------- */
+const halleyDir=(()=>{const la=HALLEY.lat*DEG,lo=HALLEY.lon*DEG;return new THREE.Vector3(Math.cos(la)*Math.cos(lo),Math.sin(la),-Math.cos(la)*Math.sin(lo));})();
+const halley=new THREE.Group();
+(function build(){
+  const blue=new THREE.MeshPhongMaterial({color:0x2f6fd6,shininess:40}),red=new THREE.MeshPhongMaterial({color:0xd8312a,shininess:40});
+  const leg=new THREE.MeshPhongMaterial({color:0x9aa3ad}),win=new THREE.MeshBasicMaterial({color:0xffd27a});
+  const S=0.0062;
+  for(let i=-3;i<=3;i++){
+    const big=i===0, w=big?S*1.25:S, h=big?S*0.95:S*0.72;
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,S*0.78),big?red:blue);m.position.set(i*S*1.12,S*0.95+h/2,0);halley.add(m);
+    const strip=new THREE.Mesh(new THREE.BoxGeometry(w*0.8,h*0.12,S*0.8),win);strip.position.copy(m.position);halley.add(strip);
+    [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([a,b])=>{const l=new THREE.Mesh(new THREE.CylinderGeometry(S*0.06,S*0.06,S*0.95,6),leg);
+      l.position.set(i*S*1.12+a*w*0.38,S*0.475,b*S*0.3);halley.add(l);});
+  }
+  const ring=new THREE.Mesh(new THREE.RingGeometry(0.016,0.0205,64),new THREE.MeshBasicMaterial({color:0xe8403a,transparent:true,opacity:0.8,side:THREE.DoubleSide,depthWrite:false}));
+  ring.rotation.x=-Math.PI/2;ring.position.y=0.0008;ring.name="ring";halley.add(ring);
+  halley.position.copy(halleyDir).multiplyScalar(1.0006);
+  halley.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),halleyDir);
+  halley.rotateY(-Math.PI/2);
+  spin.add(halley);})();
+const beamGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]);
+const beam=new THREE.Line(beamGeo,new THREE.LineDashedMaterial({color:0xffb45a,dashSize:0.02,gapSize:0.012,transparent:true,opacity:0.9}));
+scene.add(beam);
+
+/* ---------- geometry of the season ---------- */
+const tmpQ=new THREE.Quaternion(),tmpV=new THREE.Vector3(),tmpN=new THREE.Vector3();
+function declination(d){const a=2*Math.PI*(d-172)/365;return Math.asin(Math.sin(EPS)*Math.cos(a));}
+function updateScene(dt,dtDays,t){
+  const d=state.day,a=2*Math.PI*(d-172)/365;
+  orbit.rotation.y=a;
+  const azS=Math.atan2(-Math.sin(a),Math.cos(a)*Math.cos(EPS));
+  const lamS=(12-state.hours)*15*DEG;
+  spin.rotation.y=azS-lamS;
+  scene.updateMatrixWorld(true);
+  spin.getWorldQuaternion(tmpQ);U.uSun.value.set(1,0,0).applyQuaternion(tmpQ.clone().invert());
+  const cf=state.cl==="peak"?1:0.6/3.5;
+  U.uVortex.value=model.vortex(d);U.uPsc.value=model.psc(d);U.uAct.value=model.act(d);U.uHole.value=model.hole(d);
+  U.uCl.value=cf;U.uTime.value=t;U.uVRot.value=state.vrot;
+  U.uExtS.value=-64+5*Math.cos(2*Math.PI*(d-258)/365);U.uExtN.value=71-7*Math.cos(2*Math.PI*(d-70)/365);
+  cloMesh.visible=state.layers.clo;pscMesh.visible=state.layers.psc;holeMesh.visible=state.layers.hole;windMesh.visible=state.layers.wind;
+  parcels.visible=state.layers.air&&U.uVortex.value>0.02;pMat.opacity=0.85*Math.min(1,U.uVortex.value*1.5);
+  if(parcels.visible)updateParcels(dtDays);
+  halley.visible=state.layers.halley;
+  const ring=halley.getObjectByName("ring");ring.scale.setScalar(1+0.25*Math.sin(t*3));ring.material.opacity=0.55+0.3*Math.sin(t*3);
+  // Dobson's line of sight to the sun
+  halley.getWorldPosition(tmpV);tmpN.copy(tmpV).normalize();
+  const elev=Math.asin(tmpN.x); // sun is world +X
+  if(state.layers.halley&&elev>0){const p=beamGeo.attributes.position;p.setXYZ(0,tmpV.x,tmpV.y,tmpV.z);p.setXYZ(1,tmpV.x+0.42,tmpV.y,tmpV.z);p.needsUpdate=true;beam.computeLineDistances();beam.visible=true;}
+  else beam.visible=false;
+  return elev;
+}
+
+/* ---------- UI ---------- */
+const $=id=>document.getElementById(id);
+function dateLabel(d){let k=Math.floor(d)%365,m=0;while(k>=MDAYS[m]){k-=MDAYS[m];m++;}return (k+1)+" "+MONTHS[m];}
+function seasonOf(d){const m=monthOf(d);if(m===11||m<=1)return["Austral summer","northern winter"];if(m<=4)return["Austral autumn","northern spring"];if(m<=7)return["Austral winter","northern summer"];return["Austral spring","northern autumn"];}
+function monthOf(d){let k=Math.floor(d)%365,m=0;while(k>=MDAYS[m]){k-=MDAYS[m];m++;}return m;}
+const PHASES=[
+ [0,59,"Summer: the vortex is gone","Halley has 24-hour sunlight. The stratosphere is relatively warm and mixed with air from lower latitudes. Chlorine is stored in harmless reservoir forms (HCl and ClONO₂). No clouds, no sinking, ozone close to normal."],
+ [59,120,"Autumn: the vortex forms","The sun sets over the pole. As the polar air cools, westerly winds strengthen around it and begin to seal it off. Cooling air starts to sink slowly inside the ring."],
+ [120,181,"Polar night: clouds form","The vortex is sealed and dark. Between 15 and 25 km the air drops below about −78 °C, and polar stratospheric clouds form. On their surfaces chlorine is converted into active forms, but with no sunlight it cannot yet attack ozone."],
+ [181,243,"Deep winter: the sun reaches the edge","Clouds are widespread; frozen nitric acid falls out of the stratosphere, so chlorine can't be locked away again. The air keeps sinking about 1 km a month. The returning sun first lights the vortex edge, and chlorine monoxide appears there."],
+ [243,273,"Spring: chlorine switches on","Sunlight floods the vortex. Chlorine monoxide peaks and destroys ozone fast: in 1986, ozone at 16 km over the South Pole fell 78% in under four weeks. The hole opens."],
+ [273,304,"October: the hole is deepest","Ozone is at its lowest. The air starts to warm, the clouds evaporate, and chlorine gradually returns to its reservoir forms."],
+ [304,366,"Late spring: the vortex breaks up","The winds weaken and the vortex breaks apart. Ozone-rich air flows in from lower latitudes and the hole fills. Sinking stops until next autumn."]];
+function levelPill(v,labels,color){const i=v<0.08?0:v<0.45?1:v<0.85?2:3;const on=i>=2;return `<span class="pill${on?" on":""}" style="${on?"background:"+color:""}">${labels[i]}</span>`;}
+let lastUI=0;
+function updateUI(elevNow){
+  const d=state.day;$("dateBig").textContent=dateLabel(d);
+  const s=seasonOf(d);$("seasonChip").innerHTML=`<b>${s[0]}</b> · ${s[1]}`;
+  const ph=PHASES.find(p=>d>=p[0]&&d<p[1]);$("phaseTitle").textContent=ph[2];$("phaseText").textContent=ph[3];
+  $("clNote").style.display=state.cl==="natural"?"block":"none";
+  const dec=declination(d)/DEG,lat=HALLEY.lat;const noon=90-Math.abs(lat-dec);
+  $("rSun").textContent=noon<=0?"below horizon (polar night)":noon.toFixed(0)+"° above horizon";
+  const ct=-Math.tan(lat*DEG)*Math.tan(dec*DEG);const hrs=ct<=-1?24:ct>=1?0:2*Math.acos(ct)/DEG/15;
+  $("rDay").textContent=hrs>=23.95?"24 h (midnight sun)":hrs<=0.05?"0 h":hrs.toFixed(1)+" h";
+  const cf=state.cl==="peak"?1:0.6/3.5;
+  const v=model.vortex(d),p=model.psc(d),a=model.act(d),h=model.hole(d);
+  const vTxt=v<0.08?"absent":(d<180&&v<0.85)?"forming":(d>300?"breaking up":"strong, sealed");
+  $("rVortex").innerHTML=`<span class="pill${v>=0.45?" on":""}" style="${v>=0.45?"background:#cfe0ff":""}">${vTxt}</span>`;
+  $("rPsc").innerHTML=levelPill(p*v,["none","few","widespread","widespread"],"#f0b8ff");
+  const sunReach=noon>-6?1:0.35;
+  const cloV=a*v*cf*(d<243?0.55*sunReach:1);
+  $("rClo").innerHTML=levelPill(cloV,["low","rising","high","very high"],"#ff8a3d");
+  const hv=h*Math.pow(cf,1.25);
+  const hTxt=hv<0.08?"none":(d<275?"opening":(d<300?"deepest":"filling"));
+  $("rHole").innerHTML=`<span class="pill${hv>=0.45?" on":""}" style="${hv>=0.45?"background:#8a7bff":""}">${hTxt}</span>`;
+  const r=sinkRate(d,20)*30.4;
+  $("rAir").textContent=r>0.15?"sinking ~"+r.toFixed(1)+" km/month":"not sinking";
+  drawOzone();drawSink();
+}
+function setupCanvas(cv){const r=cv.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);const w=Math.max(10,Math.round(r.width*dpr)),h=Math.max(10,Math.round(r.height*dpr));if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;}const g=cv.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);return{g,w:r.width,h:r.height};}
+function axes(g,w,h,pad,yMin,yMax,yTicks,unit){g.clearRect(0,0,w,h);g.font="10.5px IBM Plex Mono, monospace";g.fillStyle="#8f9bb2";g.strokeStyle="rgba(150,175,220,0.14)";g.lineWidth=1;
+  yTicks.forEach(v=>{const y=pad.t+(1-(v-yMin)/(yMax-yMin))*(h-pad.t-pad.b);g.beginPath();g.moveTo(pad.l,y);g.lineTo(w-pad.r,y);g.stroke();g.fillText(v+(unit||""),2,y+3);});}
+function drawOzone(){const cv=$("ozChart");if(!cv.offsetParent)return;const {g,w,h}=setupCanvas(cv);const pad={l:34,r:8,t:8,b:18},yMin=140,yMax=370;
+  axes(g,w,h,pad,yMin,yMax,[150,200,250,300,350]);
+  const X=m=>pad.l+(m+0.5)/12*(w-pad.l-pad.r),Y=v=>pad.t+(1-(v-yMin)/(yMax-yMin))*(h-pad.t-pad.b);
+  g.fillStyle="#8f9bb2";MONTHS.forEach((m,i)=>{if(i%2===0)g.fillText(m[0],X(i)-3,h-4);});
+  g.fillStyle="rgba(150,175,220,0.06)";g.fillRect(X(3.5),pad.t,X(7.5)-X(3.5),h-pad.t-pad.b);
+  [["pre","#7f93b8"],["modern","#ff8a3d"]].forEach(([k,c])=>{g.strokeStyle=c;g.lineWidth=2;
+    const segs=[[7,8,9,10,11],[0,1,2,3]];segs.forEach(s=>{g.beginPath();s.forEach((m,i)=>{const v=OZ[k][m];i?g.lineTo(X(m),Y(v)):g.moveTo(X(m),Y(v));});g.stroke();});
+    g.strokeStyle=c;g.setLineDash([3,3]);g.beginPath();g.moveTo(X(11),Y(OZ[k][11]));g.lineTo(X(12),Y(OZ[k][0]));g.stroke();g.setLineDash([]);});
+  const xm=pad.l+(state.day/365)*(w-pad.l-pad.r);g.strokeStyle="rgba(228,233,243,0.7)";g.lineWidth=1;g.beginPath();g.moveTo(xm,pad.t);g.lineTo(xm,h-pad.b);g.stroke();
+  const mi=monthOf(state.day);[["pre","#7f93b8"],["modern","#ff8a3d"]].forEach(([k,c])=>{const v=OZ[k][mi];if(v){g.fillStyle=c;g.beginPath();g.arc(X(mi),Y(v),3.5,0,7);g.fill();}});
+  g.fillStyle="#cbd3e2";const v1=OZ.pre[mi],v2=OZ.modern[mi];g.fillText(v1?`${MONTHS[mi]}: ${v1} → ${v2} DU`:`${MONTHS[mi]}: no sunlit readings`,pad.l+4,pad.t+10);}
+function drawSink(){const cv=$("sinkChart");if(!cv.offsetParent)return;const {g,w,h}=setupCanvas(cv);const pad={l:34,r:8,t:8,b:18},yMin=10,yMax=32,d0=91,d1=365;
+  axes(g,w,h,pad,yMin,yMax,[12,16,20,24,28,32]);
+  const X=d=>pad.l+(d-d0)/(d1-d0)*(w-pad.l-pad.r),Y=v=>pad.t+(1-(v-yMin)/(yMax-yMin))*(h-pad.t-pad.b);
+  const ticks=[[91,"A"],[152,"J"],[213,"A"],[274,"O"],[335,"D"]];g.fillStyle="#8f9bb2";ticks.forEach(([d,l])=>g.fillText(l,X(d)-3,h-4));
+  const starts=[18,22,26,30];
+  starts.forEach((h0,j)=>{let hh=h0;g.strokeStyle=`rgba(143,227,255,${0.45+j*0.12})`;g.lineWidth=1.8;g.beginPath();g.moveTo(X(d0),Y(hh));
+    for(let d=d0;d<=d1;d+=2){hh-=sinkRate(d,hh)*2;g.lineTo(X(d),Y(hh));}g.stroke();});
+  if(state.day>=d0){const xm=X(state.day);g.strokeStyle="rgba(228,233,243,0.7)";g.lineWidth=1;g.beginPath();g.moveTo(xm,pad.t);g.lineTo(xm,h-pad.b);g.stroke();
+    starts.forEach(h0=>{const hh=integrateSink(h0,d0,state.day,SINK_K);g.fillStyle="#8fe3ff";g.beginPath();g.arc(xm,Y(hh),3,0,7);g.fill();});
+    const h20=integrateSink(22,d0,state.day,SINK_K);g.fillStyle="#cbd3e2";g.fillText(`22 km parcel now at ${h20.toFixed(1)} km`,pad.l+4,pad.t+10);}
+  else{g.fillStyle="#cbd3e2";g.fillText("Before April: no vortex, no sinking",pad.l+4,pad.t+10);}}
+
+// controls
+const playBtn=$("playBtn"),slider=$("daySlider");
+function syncPlay(){playBtn.textContent=state.playing?"❚❚":"▶";playBtn.setAttribute("aria-label",state.playing?"Pause":"Play");}
+playBtn.addEventListener("click",()=>{state.playing=!state.playing;syncPlay();});
+slider.addEventListener("input",()=>{state.day=+slider.value;updateUI();});
+function bindGroup(attr,apply){document.querySelectorAll(`[data-${attr}]`).forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll(`[data-${attr}]`).forEach(x=>x.setAttribute("aria-pressed",String(x===b)));apply(b.dataset[attr]);updateUI();}));}
+bindGroup("speed",v=>state.speed=+v);bindGroup("spin",v=>state.spin=+v);bindGroup("cl",v=>state.cl=v);
+document.querySelectorAll("[data-layer]").forEach(b=>b.addEventListener("click",()=>{const k=b.dataset.layer;state.layers[k]=!state.layers[k];b.setAttribute("aria-pressed",String(state.layers[k]));}));
+document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>{
+  const v=b.dataset.view,dist=camera.position.length();
+  if(v==="side")camera.position.set(0.35,-0.25,3.1);
+  else if(v==="pole"){tmpV.set(0,-1,0).applyQuaternion(tilt.getWorldQuaternion(tmpQ));camera.position.copy(tmpV.multiplyScalar(2.9)).add(new THREE.Vector3(0.25,0,0.35));}
+  else{halley.getWorldPosition(tmpV);camera.position.copy(tmpV.normalize().multiplyScalar(2.3)).add(new THREE.Vector3(0.15,0,0.15));}
+  controls.update();}));
+const detailsBtn=$("detailsBtn");detailsBtn.addEventListener("click",()=>{const p=$("panel");const o=!p.classList.contains("open");p.classList.toggle("open",o);detailsBtn.setAttribute("aria-expanded",String(o));updateUI();});
+syncPlay();
+
+// Halley label
+const label=$("halleyLabel"),proj=new THREE.Vector3(),camDir=new THREE.Vector3();
+function updateLabel(){if(!state.layers.halley){label.style.display="none";return;}
+  halley.getWorldPosition(proj);tmpN.copy(proj).normalize();camDir.copy(camera.position).sub(proj).normalize();
+  if(tmpN.dot(camDir)<0.12){label.style.display="none";return;}
+  proj.project(camera);const r=canvas.getBoundingClientRect();
+  label.style.display="block";label.style.left=((proj.x+1)/2*r.width)+"px";label.style.top=((1-proj.y)/2*r.height)+"px";}
+
+function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;
+  camera.fov=w<700?48:38;camera.updateProjectionMatrix();updateUI();}
+window.addEventListener("resize",resize);
+
+let last=performance.now(),t0=last;
+function frame(now){const dt=Math.min((now-last)/1000,0.1);last=now;
+  let dtDays=0;if(state.playing){dtDays=dt*state.speed;state.day=(state.day+dtDays)%365;slider.value=String(Math.floor(state.day));}
+  state.hours=(state.hours+dt*state.spin)%24;
+  state.vrot+=dt*state.spin*(2*Math.PI*0.3/24)*model.vortex(state.day);
+  const elev=updateScene(dt,dtDays,(now-t0)/1000);
+  controls.update();renderer.render(scene,camera);updateLabel();
+  if(now-lastUI>140){lastUI=now;updateUI(elev);}
+  requestAnimationFrame(frame);}
+resize();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
